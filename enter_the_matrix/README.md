@@ -1,13 +1,28 @@
 # Enter the Matrix
 
-Introduction to linear algebra (exercises 00-15, including both bonuses), in
-Rust, in [rust/](rust/): `cargo test`, `cargo run --bin ex00` ... `ex15`.
+Introduction to linear algebra (exercises 00-15, including both bonuses),
+implemented twice:
+
+| Directory | Language | Build / test |
+|---|---|---|
+| [rust](rust/) | Rust | `cargo test`, `cargo run --bin ex00` ... `ex15` |
+| [c](c/) | C99 | `make`, `make test`, `bin/ex00` ... `bin/ex15` |
 
 The subject gives its prototypes in Rust and asks for a *generic* library, so
-everything is written once over a field of scalars `K` (`trait Scalar`):
-`f32` for the real numbers and `Complex` (exercise 15) for the bonus. Vectors
-and matrices are both vector spaces (`trait VectorSpace`), which is what lets
-`linear_combination` and `lerp` work on either.
+everything is written once over a field of scalars `K`: `trait Scalar` in Rust,
+with `f32` for the real numbers and `Complex` (exercise 15) for the bonus.
+Vectors and matrices are both vector spaces (`trait VectorSpace`), which is what
+lets `linear_combination` and `lerp` work on either.
+
+**The C version** has no generics, so it gets the same effect with a table of
+operations, `t_field` (`g_real` = float, `g_complex`): `t_vec` and `t_mat`
+carry a pointer to their field, and every function works through it, exactly
+like the Rust trait. Functions return a `t_err` code (never abort) and leave
+their arguments untouched on error; scalars are passed as `void *` to a `K`
+(`float *` for real data, `t_complex *` for complex data). It builds with
+`-Wall -Wextra -Werror -std=c99 -pedantic -ffp-contract=off` (no hidden fusing
+of operations: the only fused ones are the explicit `fmaf` the subject allows)
+and links `-lm` for `fmaf`, `powf` and `tanf` only.
 
 Each `src/exNN_*.rs` file starts with an explanation of the maths and of the
 method, the allowed functions and the complexity.
