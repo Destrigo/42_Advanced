@@ -1,7 +1,6 @@
 //! Ready, Set, Boole! — an introduction to Boolean Algebra.
-//! One module per exercise, shared RPN parser/AST in `ast`.
+//! One module per exercise, shared RPN helpers in `rpn`.
 
-pub mod ast;
 pub mod ex00_adder;
 pub mod ex01_multiplier;
 pub mod ex02_gray_code;
@@ -14,3 +13,4 @@ pub mod ex08_powerset;
 pub mod ex09_eval_set;
 pub mod ex10_curve;
 pub mod ex11_inverse;
+pub mod rpn;

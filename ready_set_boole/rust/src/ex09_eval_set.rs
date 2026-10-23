@@ -5,97 +5,98 @@
 //!
 //! Logic and set theory mirror each other, so each operator has a set
 //! counterpart. The universe is the union of all given sets:
-//! - `!a`  complement:            universe \ a
-//! - `a&b` intersection:          a ∩ b
-//! - `a|b` union:                 a ∪ b
-//! - `a^b` symmetric difference:  (a ∪ b) \ (a ∩ b)
-//! - `a>b` material condition:    !a ∪ b
-//! - `a=b` equivalence:           (a ∩ b) ∪ (!a ∩ !b)
+//! - `!a`  complement:           universe \ a
+//! - `a&b` intersection
+//! - `a|b` union
+//! - `a^b` symmetric difference
+//! - `a>b` material condition:   `!a | b`
+//! - `a=b` equivalence:          `(a & b) | (!a & !b)`
 //!
-//! The formula is parsed with the shared AST and walked recursively. The
-//! number of distinct variables must equal the number of sets provided.
+//! Idea: these operations are pointwise. An element u of the universe belongs
+//! to the result exactly when the boolean formula is true after replacing each
+//! letter with "u is in that set". So we build the (sorted, duplicate-free)
+//! universe and evaluate the ordinary boolean formula once per element, with
+//! the stack machine of `rpn.rs`. Each input set is sorted once, so "u is in
+//! set k" is a binary search.
+//!
+//! The number of distinct variables must equal the number of sets provided,
+//! and they must be A, B, C, ... without gaps. Otherwise an error is printed
+//! on stderr and an empty set is returned. Duplicates inside a set are ignored.
+//!
+//! Complexity: O(N log N) to sort the N input numbers, then one formula
+//! evaluation (plus one binary search per set) per distinct element.
 
-use crate::ast::{Node, Op};
-use std::collections::BTreeSet;
+use crate::rpn;
 
-type Set = BTreeSet<i32>;
-
-/// Evaluates an RPN formula where each letter is a set (A = first set, ...):
-/// ! is the complement in the union of all sets, & the intersection,
-/// | the union, ^ the symmetric difference.
-/// Invalid input prints an error and returns an empty set.
 pub fn eval_set(formula: &str, sets: Vec<Vec<i32>>) -> Vec<i32> {
-    match evaluate(formula, &sets) {
-        Ok(s) => s.into_iter().collect(),
-        Err(e) => {
-            eprintln!("Error: {e}");
-            Vec::new()
-        }
-    }
+    try_eval_set(formula, sets).unwrap_or_else(|e| {
+        eprintln!("Error: {e}");
+        Vec::new()
+    })
 }
 
-fn evaluate(formula: &str, sets: &[Vec<i32>]) -> Result<Set, String> {
-    let node = Node::parse(formula)?;
-    let vars = node.vars();
-    if vars.len() != sets.len() {
+pub fn try_eval_set(formula: &str, sets: Vec<Vec<i32>>) -> Result<Vec<i32>, String> {
+    rpn::check(formula)?;
+    let n = sets.len();
+    if n > 26 || rpn::vars(formula) != (1u32 << n) - 1 {
         return Err(format!(
-            "{} variable(s) in the formula but {} set(s) given",
-            vars.len(),
-            sets.len()
+            "the formula needs exactly the variables A..{} for the {n} set(s) given",
+            (b'A' + n.saturating_sub(1) as u8) as char
         ));
     }
-    if let Some(v) = vars.iter().find(|v| (**v as usize - 'A' as usize) >= sets.len()) {
-        return Err(format!("variable '{v}' has no matching set"));
-    }
-    let sets: Vec<Set> = sets.iter().map(|s| s.iter().copied().collect()).collect();
-    let universe: Set = sets.iter().flatten().copied().collect();
-    walk(&node, &sets, &universe)
-}
-
-fn walk(node: &Node, sets: &[Set], universe: &Set) -> Result<Set, String> {
-    match node {
-        Node::Const(_) => Err("constants are not allowed in set formulas".to_string()),
-        Node::Var(c) => Ok(sets[*c as usize - 'A' as usize].clone()),
-        Node::Not(a) => Ok(universe - &walk(a, sets, universe)?),
-        Node::Bin(op, a, b) => {
-            let (x, y) = (walk(a, sets, universe)?, walk(b, sets, universe)?);
-            let not_x = universe - &x;
-            Ok(match op {
-                Op::And => &x & &y,
-                Op::Or => &x | &y,
-                Op::Xor => &x ^ &y,
-                Op::Imp => &not_x | &y,
-                Op::Eq => &(&x & &y) | &(&not_x & &(universe - &y)),
-            })
-        }
-    }
+    let sorted: Vec<Vec<i32>> = sets
+        .into_iter()
+        .map(|mut s| {
+            s.sort_unstable();
+            s.dedup();
+            s
+        })
+        .collect();
+    let mut universe: Vec<i32> = sorted.iter().flatten().copied().collect();
+    universe.sort_unstable();
+    universe.dedup();
+    let mut stack = Vec::new();
+    let mut vals = [0i8; 26];
+    Ok(universe
+        .into_iter()
+        .filter(|u| {
+            for (k, s) in sorted.iter().enumerate() {
+                vals[k] = s.binary_search(u).is_ok() as i8;
+            }
+            rpn::eval(formula, &vals, &mut stack) == 1
+        })
+        .collect())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn sorted(mut v: Vec<i32>) -> Vec<i32> {
-        v.sort();
-        v
-    }
-
     #[test]
     fn matches_subject() {
         let ab = vec![vec![0, 1, 2], vec![0, 3, 4]];
         assert_eq!(eval_set("AB&", ab.clone()), vec![0]);
-        assert_eq!(sorted(eval_set("AB^", ab.clone())), vec![1, 2, 3, 4]);
-        assert_eq!(
-            sorted(eval_set("AB|", vec![vec![0, 1, 2], vec![3, 4, 5]])),
-            vec![0, 1, 2, 3, 4, 5]
-        );
+        assert_eq!(eval_set("AB^", ab.clone()), vec![1, 2, 3, 4]);
+        assert_eq!(eval_set("AB|", vec![vec![0, 1, 2], vec![3, 4, 5]]), vec![0, 1, 2, 3, 4, 5]);
         assert!(eval_set("A!", vec![vec![0, 1, 2]]).is_empty());
-        assert_eq!(sorted(eval_set("A!B&", ab)), vec![3, 4]);
+        assert_eq!(eval_set("A!B&", ab.clone()), vec![3, 4]);
+        assert_eq!(eval_set("AB>", ab), vec![0, 3, 4]);
+    }
+
+    #[test]
+    fn edge_cases() {
+        assert_eq!(eval_set("A", vec![vec![3, 3, 1, i32::MIN, i32::MAX]]), vec![i32::MIN, 1, 3, i32::MAX]);
+        assert!(eval_set("A", vec![vec![]]).is_empty());
+        assert_eq!(eval_set("A!B&", vec![vec![], vec![1]]), vec![1]);
     }
 
     #[test]
     fn invalid() {
-        assert!(eval_set("AB&", vec![vec![1]]).is_empty());
-        assert!(eval_set("AC&", vec![vec![1], vec![2]]).is_empty());
+        assert!(eval_set("AB&", vec![vec![1]]).is_empty()); // too few sets
+        assert!(eval_set("A", vec![vec![1], vec![2]]).is_empty()); // too many sets
+        assert!(eval_set("AC&", vec![vec![1], vec![2]]).is_empty()); // gap
+        assert!(eval_set("AB", vec![vec![1], vec![2]]).is_empty()); // invalid RPN
+        assert!(eval_set("", vec![]).is_empty());
+        assert!(eval_set("A", vec![]).is_empty());
     }
 }
