@@ -5,7 +5,7 @@ ifeq ($(OS),Windows_NT)
 EXE      = .exe
 endif
 
-SRC      = src/ast.c src/ex00_adder.c src/ex01_multiplier.c \
+SRC      = src/rpn.c src/ex00_adder.c src/ex01_multiplier.c \
            src/ex02_gray_code.c src/ex03_eval_formula.c \
            src/ex04_truth_table.c src/ex05_nnf.c src/ex06_cnf.c \
            src/ex07_sat.c src/ex08_powerset.c src/ex09_eval_set.c \

@@ -29,6 +29,10 @@ bool	reverse_map(double n, uint16_t *x, uint16_t *y)
 {
 	uint32_t	z;
 
+	if (!x || !y)
+		return (fprintf(stderr, "Error: null output pointer\n"), false);
+	*x = 0;
+	*y = 0;
 	if (!(n >= 0.0 && n < 1.0))
 	{
 		fprintf(stderr, "Error: %g is outside [0, 1)\n", n);
