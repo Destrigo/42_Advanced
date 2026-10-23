@@ -29,10 +29,23 @@ t_powerset	*powerset(const int *set, size_t n)
 		fprintf(stderr, "Error: set too large for a powerset\n");
 		return (NULL);
 	}
+	if (n > 0 && !set)
+	{
+		fprintf(stderr, "Error: null set\n");
+		return (NULL);
+	}
 	p = xmalloc(sizeof(*p));
 	p->count = (size_t)1 << n;
-	p->subsets = xmalloc(p->count * sizeof(int *));
-	p->sizes = xmalloc(p->count * sizeof(size_t));
+	p->subsets = calloc(p->count, sizeof(int *));
+	p->sizes = calloc(p->count, sizeof(size_t));
+	if (!p->subsets || !p->sizes)
+	{
+		fprintf(stderr, "Error: not enough memory for 2^%zu subsets\n", n);
+		free(p->subsets);
+		free(p->sizes);
+		free(p);
+		return (NULL);
+	}
 	for (mask = 0; mask < p->count; mask++)
 	{
 		p->sizes[mask] = 0;

@@ -2,6 +2,9 @@
 
 use std::collections::BTreeSet;
 
+/// Maximum tree height accepted by the parser.
+pub const MAX_DEPTH: usize = 1000;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Op {
     And,
@@ -62,8 +65,12 @@ impl Node {
     }
 
     /// Parses a formula in RPN (`0`, `1`, `A..Z`, `! & | ^ > =`).
+    ///
+    /// Trees deeper than [`MAX_DEPTH`] are rejected: every pass over the tree
+    /// (eval, NNF, drop...) is recursive and would overflow the stack.
     pub fn parse(formula: &str) -> Result<Node, String> {
         let mut stack: Vec<Node> = Vec::new();
+        let mut heights: Vec<usize> = Vec::new(); // height of each node on `stack`
         for (i, c) in formula.chars().enumerate() {
             match c {
                 '0' => stack.push(Node::Const(false)),
@@ -80,6 +87,16 @@ impl Node {
                     stack.push(Node::bin(op, a, b));
                 }
             }
+            // Leaves have height 1; '!' adds one level, binary ops take the max + 1.
+            let h = match c {
+                '!' => heights.pop().unwrap_or(0) + 1,
+                '0' | '1' | 'A'..='Z' => 1,
+                _ => heights.pop().unwrap_or(0).max(heights.pop().unwrap_or(0)) + 1,
+            };
+            if h > MAX_DEPTH {
+                return Err(format!("formula too deep at {i} (max {MAX_DEPTH})"));
+            }
+            heights.push(h);
         }
         match (stack.pop(), stack.is_empty()) {
             (Some(n), true) => Ok(n),

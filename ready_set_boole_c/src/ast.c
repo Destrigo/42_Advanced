@@ -37,6 +37,7 @@ t_node	*ast_new(t_type type, char sym, t_node *l, t_node *r)
 	n->sym = sym;
 	n->l = l;
 	n->r = r;
+	n->h = 1 + (l && l->h > (r ? r->h : 0) ? l->h : (r ? r->h : 0));
 	return (n);
 }
 
@@ -71,6 +72,11 @@ t_node	*ast_parse(const char *f)
 	size_t	i;
 	t_node	*root;
 
+	if (!f)
+	{
+		fprintf(stderr, "Error: null formula\n");
+		return (NULL);
+	}
 	st = xmalloc((strlen(f) + 1) * sizeof(*st));
 	top = 0;
 	i = 0;
@@ -85,6 +91,8 @@ t_node	*ast_parse(const char *f)
 			if (top < 1)
 				return (parse_fail(st, top, "missing operand for '!'", i));
 			st[top - 1] = ast_new(N_NOT, '!', st[top - 1], NULL);
+			if (st[top - 1]->h > AST_MAX_DEPTH)
+				return (parse_fail(st, top, "formula too deep", i));
 		}
 		else if (strchr("&|^>=", f[i]))
 		{
@@ -92,6 +100,8 @@ t_node	*ast_parse(const char *f)
 				return (parse_fail(st, top, "missing operand for operator", i));
 			st[top - 2] = ast_new(N_BIN, f[i], st[top - 2], st[top - 1]);
 			top--;
+			if (st[top - 1]->h > AST_MAX_DEPTH)
+				return (parse_fail(st, top, "formula too deep", i));
 		}
 		else
 			return (parse_fail(st, top, "invalid symbol", i));

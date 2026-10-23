@@ -157,6 +157,53 @@ static void	test_sets(void)
 	CHECK(!eval_set("AC&", ab, sz, 2, &out, &n));	/* gap in variables */
 }
 
+/* Hostile inputs: must fail cleanly, never crash. */
+static void	test_defensive(void)
+{
+	size_t	n = 200000;
+	char	*deep = malloc(2 * n + 1);
+	char	*ok = malloc(2 * 400 + 2);
+	char	*r;
+	size_t	i;
+	int		*out;
+	size_t	out_n;
+
+	for (i = 0; i < n; i++)
+	{
+		deep[i] = 'A';
+		deep[n + i] = '&';
+	}
+	deep[2 * n] = '\0';
+	CHECK(!sat(deep));			/* 200000 levels: rejected, no stack overflow */
+	CHECK(negation_normal_form(deep) == NULL);
+	CHECK(conjunctive_normal_form(deep) == NULL);
+	for (i = 0; i < 400; i++)
+		ok[i] = 'A';
+	for (i = 0; i < 399; i++)
+		ok[400 + i] = '&';
+	ok[799] = '\0';
+	CHECK(sat(ok));				/* 400 levels: still fine */
+	r = conjunctive_normal_form(ok);
+	CHECK(r && strcmp(r, "A") == 0);	/* duplicates collapse */
+	free(r);
+	free(deep);
+	free(ok);
+
+	CHECK(!eval_formula(NULL));
+	CHECK(!eval_formula(""));
+	CHECK(!eval_formula("1 1&"));
+	CHECK(!eval_formula("\xff"));
+	CHECK(!sat(NULL));
+	CHECK(negation_normal_form(NULL) == NULL);
+	CHECK(conjunctive_normal_form("") == NULL);
+	CHECK(conjunctive_normal_form("A1&") == NULL);	/* constants unsupported */
+	CHECK(powerset(NULL, 3) == NULL);
+	CHECK(powerset(NULL, 31) == NULL);
+	CHECK(!eval_set(NULL, NULL, NULL, 0, &out, &out_n));
+	print_truth_table("A&");	/* invalid: message only */
+	print_truth_table(NULL);
+}
+
 static void	test_curve(void)
 {
 	uint32_t	x;
@@ -191,6 +238,7 @@ int	main(void)
 	test_arith();
 	test_logic();
 	test_sets();
+	test_defensive();
 	test_curve();
 	printf("%d/%d checks passed\n", g_total - g_fail, g_total);
 	return (g_fail != 0);

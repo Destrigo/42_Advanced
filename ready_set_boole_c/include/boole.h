@@ -17,10 +17,13 @@ typedef enum e_type
 	N_BIN		/* sym = one of & | ^ > = , operands in l and r */
 }	t_type;
 
+# define AST_MAX_DEPTH 1000	/* deeper formulas are rejected (recursion safety) */
+
 typedef struct s_node
 {
 	t_type			type;
 	char			sym;
+	int				h;	/* height of the subtree, leaves have h = 1 */
 	struct s_node	*l;
 	struct s_node	*r;
 }	t_node;
